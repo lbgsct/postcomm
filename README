@@ -1,0 +1,113 @@
+Возможности
+
+    Посты:
+        Просмотр списка всех постов (posts).
+        Просмотр конкретного поста по заголовку (post(title: "...")) вместе с иерархией комментариев.
+        Создание нового поста (createPost).
+        Запрет комментариев (если автор) (disableComments).
+
+    Комментарии:
+        Имеют неограниченную вложенность (иерархия).
+        Ограничение длины в 2000 символов.
+        Создание комментария (createComment), в том числе с указанием parentId.
+
+    Пользователи:
+        Регистрация (registerUser).
+        Аутентификация (login) – возвращает заглушку «dummy-token» (для демонстрации).
+
+    GraphQL:
+        Все операции (Query/Mutation) обрабатываются через github.com/graphql-go/graphql.
+        Возможна реализация Subscriptions для асинхронных уведомлений, но в данной сборке не завершена из-за ограничений используемой библиотеки.
+
+    Тесты:
+        Покрывают слой репозитория (методы CreatePost, CreateComment и т.д.).
+        Покрывают слой GraphQL (Query/Mutation), используя моки интерфейса Storage.
+        Запускаются командой:
+
+        go test -v ./...
+
+    Docker:
+        Содержит Dockerfile, позволяющий собрать образ, и при необходимости docker-compose.yml, чтобы запускать приложение и базу вместе.
+
+Структура проекта (пример)
+
+PostComm/
+├── cmd/
+│   └── main.go                // Точка входа, запускает HTTP-сервер (порт 8080)
+├── internal/
+│   ├── graphql/
+│   │   ├── graphql.go         // Схема GraphQL (Query, Mutation), Handler
+│   │   └── graphql_test.go    // Юнит-тесты для уровня GraphQL
+│   ├── models/
+│   │   └── models.go          // Структуры User, Post, Comment
+│   ├── repository/
+│   │   ├── postgres.go        // Реализация репозитория (Storage) для PostgreSQL
+│   │   ├── in_memory.go       // Реализация репозитория (Storage) в памяти
+│   │   ├── mocks.go           // Моки (testify/mock) для интерфейса Storage
+│   │   ├── postgres_test.go   // Тесты для postgres-репозитория
+│   │   └── in_memory_test.go  // Тесты для in-memory репозитория
+│   └── ...
+├── Dockerfile
+├── go.mod
+├── go.sum
+└── README.md                  // Этот файл
+
+(Конкретное расположение файлов может отличаться.)
+Быстрый старт (In-Memory)
+
+    Склонируйте репозиторий:
+
+git clone https://github.com/username/PostComm.git
+cd PostComm
+
+Установите зависимости:
+
+go mod download
+
+Запустите:
+
+go run ./cmd/main.go
+
+Откройте http://localhost:8080/graphql.
+
+    Запросы можно отправлять POST-запросом с телом вида:
+
+        {
+          "query": "query { posts { id, title } }"
+        }
+
+        Или через GET-параметр: http://localhost:8080/graphql?query=query+{+posts+{+id+}+}
+
+Использование с PostgreSQL
+
+    Убедитесь, что PostgreSQL запущен (возможно, через Docker).
+    В коде main.go или через флаг/переменные окружения укажите, что используете postgres.go.
+    Настройте DSN (host, port, user, pass, dbname).
+    (Опционально) прогоните миграции.
+    Запустите проект. Пример:
+
+    go run ./cmd/main.go -db=postgres
+
+Запуск в Docker
+
+Простейший вариант (пример Dockerfile):
+
+FROM golang:1.20-alpine AS build
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go build -o postcomm ./cmd/main.go
+
+FROM alpine:latest
+WORKDIR /app
+COPY --from=build /app/postcomm .
+EXPOSE 8080
+ENTRYPOINT [ "./postcomm" ]
+
+Сборка и запуск:
+
+docker build -t postcomm .
+docker run -p 8080:8080 postcomm
+
+(Дополните при необходимости docker-compose.yml, чтобы одновременно поднимать PostgreSQL.)
